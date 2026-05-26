@@ -6,6 +6,7 @@
 <title>Relatório Tintim - Dashboards de Leads</title>
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
 <style>
   :root, [data-theme="light"] {
     --bg: #f8fafc;
@@ -638,6 +639,45 @@ function applyChartTheme() {
 }
 Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
 
+Chart.register(ChartDataLabels);
+Chart.defaults.set('plugins.datalabels.display', false);
+
+function datalabelsForBar(orientation) {
+  return {
+    display: true,
+    anchor: 'end',
+    align: orientation === 'vertical' ? 'top' : 'end',
+    formatter: (v) => v > 0 ? v : '',
+    color: cssVar('--text'),
+    font: { weight: '600', size: 11 },
+    clip: false,
+    offset: 4,
+  };
+}
+
+function datalabelsForStackTotal() {
+  return {
+    display: function(ctx) {
+      const ds = ctx.chart.data.datasets;
+      const idx = ctx.dataIndex;
+      for (let i = ds.length - 1; i >= 0; i--) {
+        if ((ds[i].data[idx] || 0) > 0) return ctx.datasetIndex === i;
+      }
+      return false;
+    },
+    anchor: 'end',
+    align: 'top',
+    formatter: (v, ctx) => {
+      const total = ctx.chart.data.datasets.reduce((s, d) => s + (d.data[ctx.dataIndex] || 0), 0);
+      return total > 0 ? total : '';
+    },
+    color: cssVar('--text'),
+    font: { weight: '700', size: 11 },
+    clip: false,
+    offset: 4,
+  };
+}
+
 // Theme toggle
 function setTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
@@ -902,8 +942,10 @@ function renderDailyVolume(rows) {
       responsive: true,
       maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
+      layout: { padding: { top: 20 } },
       plugins: {
         legend: { position: 'top', labels: { boxWidth: 12, boxHeight: 12, padding: 14, usePointStyle: true, pointStyle: 'rectRounded' } },
+        datalabels: datalabelsForStackTotal(),
         tooltip: {
           callbacks: {
             title: (items) => {
@@ -1001,8 +1043,10 @@ function renderOrigin(rows) {
       indexAxis: 'y',
       responsive: true,
       maintainAspectRatio: false,
+      layout: { padding: { right: 28 } },
       plugins: {
         legend: { display: false },
+        datalabels: datalabelsForBar('horizontal'),
         tooltip: {
           callbacks: {
             label: (ctx) => {
@@ -1083,8 +1127,10 @@ function renderFunnel(rows) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      layout: { padding: { top: 20 } },
       plugins: {
         legend: { display: false },
+        datalabels: datalabelsForBar('vertical'),
         tooltip: {
           callbacks: {
             label: (ctx) => `${ctx.parsed.y} leads`
@@ -1274,8 +1320,10 @@ function renderLeadsByOriginDetail(rows) {
       indexAxis: 'y',
       responsive: true,
       maintainAspectRatio: false,
+      layout: { padding: { right: 28 } },
       plugins: {
         legend: { display: false },
+        datalabels: datalabelsForBar('horizontal'),
         tooltip: {
           callbacks: {
             label: (ctx) => {
@@ -1433,8 +1481,10 @@ function renderConvByOrigin(converted) {
       indexAxis: 'y',
       responsive: true,
       maintainAspectRatio: false,
+      layout: { padding: { right: 28 } },
       plugins: {
         legend: { display: false },
+        datalabels: datalabelsForBar('horizontal'),
         tooltip: {
           callbacks: {
             label: (ctx) => {
@@ -1509,7 +1559,11 @@ function renderUtmChart(canvasId, converted, key) {
       indexAxis: 'y',
       responsive: true,
       maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
+      layout: { padding: { right: 28 } },
+      plugins: {
+        legend: { display: false },
+        datalabels: datalabelsForBar('horizontal'),
+      },
       scales: { x: { grid: { color: cssVar('--border') }, beginAtZero: true, ticks: { precision: 0 } }, y: { grid: { display: false } } }
     }
   });
