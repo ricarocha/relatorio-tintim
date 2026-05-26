@@ -1,0 +1,1899 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Relatório Tintim - Dashboards de Leads</title>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root, [data-theme="light"] {
+    --bg: #f8fafc;
+    --bg-card: #ffffff;
+    --bg-hover: #f1f5f9;
+    --border: #e2e8f0;
+    --text: #0f172a;
+    --text-muted: #64748b;
+    --accent: #0284c7;
+    --accent-2: #7c3aed;
+    --green: #16a34a;
+    --red: #dc2626;
+    --yellow: #ca8a04;
+    --shadow: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
+    --rate-high-bg: #dcfce7;
+    --rate-high-fg: #15803d;
+    --rate-mid-bg: #fef3c7;
+    --rate-mid-fg: #a16207;
+    --rate-low-bg: #f1f5f9;
+    --rate-low-fg: #64748b;
+    --accent-soft: var(--accent-soft);
+    --accent-soft-2: var(--accent-soft-2);
+    --accent-soft-3: var(--accent-soft-3);
+    --btn-fg: #ffffff;
+    --tracked-good: #16a34a;
+    --tracked-bad: #dc2626;
+  }
+  [data-theme="dark"] {
+    --bg: #0f172a;
+    --bg-card: #1e293b;
+    --bg-hover: #334155;
+    --border: #334155;
+    --text: #e2e8f0;
+    --text-muted: #94a3b8;
+    --accent: #38bdf8;
+    --accent-2: #a78bfa;
+    --green: #4ade80;
+    --red: #f87171;
+    --yellow: #facc15;
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+    --rate-high-bg: rgba(74, 222, 128, 0.18);
+    --rate-high-fg: #4ade80;
+    --rate-mid-bg: rgba(250, 204, 21, 0.18);
+    --rate-mid-fg: #facc15;
+    --rate-low-bg: rgba(148, 163, 184, 0.18);
+    --rate-low-fg: #94a3b8;
+    --accent-soft: rgba(56, 189, 248, 0.08);
+    --accent-soft-2: rgba(56, 189, 248, 0.14);
+    --accent-soft-3: rgba(56, 189, 248, 0.35);
+    --btn-fg: #0f172a;
+    --tracked-good: #4ade80;
+    --tracked-bad: #f87171;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    transition: background 0.2s, color 0.2s;
+  }
+  header {
+    padding: 24px 32px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  header h1 {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 600;
+  }
+  header h1 span { color: var(--accent); }
+  .file-controls { display: flex; gap: 12px; align-items: center; }
+  .file-label {
+    background: var(--accent);
+    color: var(--btn-fg);
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 14px;
+    transition: opacity 0.15s;
+  }
+  .file-label:hover { opacity: 0.85; }
+  .file-name { color: var(--text-muted); font-size: 13px; }
+  main { padding: 24px 32px 64px; max-width: 1400px; margin: 0 auto; }
+
+  .empty-state {
+    text-align: center;
+    padding: 80px 20px;
+    color: var(--text-muted);
+  }
+  .empty-state h2 { color: var(--text); font-weight: 500; margin-bottom: 8px; }
+  .dropzone {
+    display: block;
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    padding: 60px 20px;
+    margin: 32px auto;
+    max-width: 600px;
+    transition: all 0.2s;
+    cursor: pointer;
+  }
+  .dropzone h2, .dropzone p { pointer-events: none; }
+  .dropzone:hover, .dropzone.drag { border-color: var(--accent); background: var(--accent-soft); }
+
+  .kpis {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .kpi {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px 20px;
+    box-shadow: var(--shadow);
+  }
+  .kpi-label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .kpi-value { font-size: 26px; font-weight: 700; margin-top: 6px; }
+  .kpi-sub { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 16px;
+  }
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    min-height: 320px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: var(--shadow);
+  }
+  .card h3 {
+    margin: 0 0 4px 0;
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .card p.subtitle { margin: 0 0 16px 0; color: var(--text-muted); font-size: 12px; }
+  .chart-wrap { flex: 1; position: relative; min-height: 260px; }
+  .col-4 { grid-column: span 4; }
+  .col-6 { grid-column: span 6; }
+  .col-8 { grid-column: span 8; }
+  .col-12 { grid-column: span 12; }
+  @media (max-width: 900px) {
+    .col-4, .col-6, .col-8 { grid-column: span 12; }
+  }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table th, table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  table th { color: var(--text-muted); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+  table tbody tr:hover { background: var(--bg-hover); }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .scroll-y { overflow-y: auto; max-height: 320px; }
+
+  .filter-bar {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+    align-items: center;
+  }
+  .filter-bar label { font-size: 13px; color: var(--text-muted); }
+  .filter-bar select, .filter-bar input {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 13px;
+  }
+  .hidden { display: none !important; }
+
+  .tabs {
+    display: flex;
+    gap: 4px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 20px;
+  }
+  .tab {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    padding: 12px 20px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+  .badge {
+    display: inline-block;
+    background: var(--accent);
+    color: var(--btn-fg);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-left: 6px;
+  }
+  .search-input {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 13px;
+    width: 240px;
+  }
+  .export-btn {
+    background: var(--green);
+    border: none;
+    color: var(--btn-fg);
+    padding: 6px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .export-btn:hover { opacity: 0.85; }
+  .rate-cell {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .rate-high { background: var(--rate-high-bg); color: var(--rate-high-fg); }
+  .rate-mid  { background: var(--rate-mid-bg);  color: var(--rate-mid-fg); }
+  .rate-low  { background: var(--rate-low-bg);  color: var(--rate-low-fg); }
+
+  .pills {
+    display: inline-flex;
+    background: var(--bg-hover);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 3px;
+    gap: 2px;
+  }
+  .pill {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 500;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .pill:hover { color: var(--text); }
+  .pill.active {
+    background: var(--accent);
+    color: var(--btn-fg);
+    font-weight: 600;
+  }
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .card-header h3 { margin: 0 0 4px 0; }
+  table th.sortable { cursor: pointer; user-select: none; }
+  table th.sortable:hover { color: var(--text); }
+  table th.sort-asc::after { content: ' ▲'; color: var(--accent); }
+  table th.sort-desc::after { content: ' ▼'; color: var(--accent); }
+  tr.drillable { cursor: pointer; }
+  tr.drillable:hover { background: var(--accent-soft); }
+
+  .theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .theme-toggle-label {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+  .theme-switch {
+    position: relative;
+    width: 44px;
+    height: 24px;
+    background: var(--bg-hover);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    transition: background 0.2s;
+  }
+  .theme-switch::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 18px;
+    height: 18px;
+    background: var(--accent);
+    border-radius: 50%;
+    transition: transform 0.2s, background 0.2s;
+  }
+  [data-theme="dark"] .theme-switch::after {
+    transform: translateX(20px);
+  }
+  tr.drillable td:first-child::before { content: '↓ '; color: var(--accent); opacity: 0.6; font-size: 11px; }
+
+  .breadcrumb {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+  .crumb {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--accent-soft-2);
+    border: 1px solid var(--accent-soft-3);
+    color: var(--accent);
+    padding: 4px 10px;
+    border-radius: 14px;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .crumb-label { color: var(--text-muted); font-weight: 400; }
+  .crumb-clear {
+    background: none;
+    border: none;
+    color: var(--accent);
+    cursor: pointer;
+    padding: 0 0 0 2px;
+    font-size: 14px;
+    line-height: 1;
+  }
+  .crumb-clear:hover { color: var(--red); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Relatório <span>Tintim</span> - Dashboards de Leads</h1>
+  <div class="file-controls">
+    <label class="theme-toggle" title="Alternar tema">
+      <span class="theme-toggle-label" id="themeLabel">Claro</span>
+      <span class="theme-switch"></span>
+    </label>
+    <span id="fileName" class="file-name">Nenhum arquivo carregado</span>
+    <input type="file" id="fileInput" accept=".csv,text/csv" hidden />
+    <label class="file-label" for="fileInput">Carregar CSV</label>
+  </div>
+</header>
+
+<main>
+  <div id="emptyState" class="empty-state">
+    <label class="dropzone" id="dropzone" for="fileInput">
+      <h2>Faça upload da planilha de leads</h2>
+      <p>Arraste o arquivo CSV aqui ou clique para selecionar.</p>
+      <p style="font-size:12px; margin-top:16px;">Formato esperado: export do Tintim com colunas Origem, Etapa da Jornada, UTMs, etc.</p>
+    </label>
+  </div>
+
+  <div id="dashboard" class="hidden">
+    <div class="filter-bar">
+      <label>Período:</label>
+      <select id="datePreset">
+        <option value="all">Todos</option>
+        <option value="today">Hoje</option>
+        <option value="yesterday">Ontem</option>
+        <option value="last7">Últimos 7 dias</option>
+        <option value="last30">Últimos 30 dias</option>
+        <option value="last90">Últimos 90 dias</option>
+        <option value="thisMonth">Este mês</option>
+        <option value="lastMonth">Mês passado</option>
+        <option value="thisYear">Este ano</option>
+        <option value="custom">Personalizado</option>
+      </select>
+      <input type="date" id="dateFrom" />
+      <span style="color: var(--text-muted)">até</span>
+      <input type="date" id="dateTo" />
+      <label>Etapa:</label>
+      <select id="filterStage"><option value="">Todas</option></select>
+      <button id="clearFilters" style="background:var(--bg-card); border:1px solid var(--border); color:var(--text); padding:6px 12px; border-radius:6px; cursor:pointer; font-size:13px;">Limpar filtros</button>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" data-view="overview">Visão Geral</button>
+      <button class="tab" data-view="origens">Origens <span id="origBadge" class="badge">0</span></button>
+      <button class="tab" data-view="conversions">Conversões <span id="convBadge" class="badge">0</span></button>
+    </div>
+
+    <div id="viewOverview">
+    <div class="kpis" id="kpis"></div>
+
+    <div class="grid">
+      <div class="card col-12">
+        <h3>Volume Diário de Leads</h3>
+        <p class="subtitle">Leads por dia, segmentados por categoria de origem</p>
+        <div class="chart-wrap" style="min-height:340px;"><canvas id="chartDailyVolume"></canvas></div>
+      </div>
+
+      <div class="card col-4">
+        <h3>Rastreamento dos Leads</h3>
+        <p class="subtitle">Leads com origem identificada vs. não rastreados</p>
+        <div class="chart-wrap"><canvas id="chartTracked"></canvas></div>
+      </div>
+      <div class="card col-8">
+        <h3>Leads por Origem</h3>
+        <p class="subtitle">Distribuição por canal de origem</p>
+        <div class="chart-wrap"><canvas id="chartOrigin"></canvas></div>
+      </div>
+
+      <div class="card col-6">
+        <h3>Origem dos Leads Convertidos</h3>
+        <p class="subtitle">Apenas leads com vendas concretizadas</p>
+        <div class="chart-wrap"><canvas id="chartConverted"></canvas></div>
+      </div>
+      <div class="card col-6">
+        <h3>Funil por Etapa da Jornada</h3>
+        <p class="subtitle">Volume de leads por estágio</p>
+        <div class="chart-wrap"><canvas id="chartFunnel"></canvas></div>
+      </div>
+
+      <div class="card col-6">
+        <h3>Top Campanhas Meta Ads</h3>
+        <p class="subtitle">Por volume de leads (e vendas)</p>
+        <div class="scroll-y" id="tableMeta"></div>
+      </div>
+      <div class="card col-6">
+        <h3>Top Campanhas Google Ads</h3>
+        <p class="subtitle">Por volume de leads (e vendas)</p>
+        <div class="scroll-y" id="tableGoogle"></div>
+      </div>
+    </div>
+    </div><!-- /viewOverview -->
+
+    <div id="viewOrigens" class="hidden">
+      <div class="kpis" id="kpisOrig"></div>
+
+      <div class="grid">
+        <div class="card col-6">
+          <h3>Leads por Categoria</h3>
+          <p class="subtitle">Meta, Google, Outras e Não Rastreado</p>
+          <div class="chart-wrap"><canvas id="chartLeadsByCategory"></canvas></div>
+        </div>
+        <div class="card col-6">
+          <h3>Leads por Origem (detalhado)</h3>
+          <p class="subtitle">Cada canal individualmente</p>
+          <div class="chart-wrap"><canvas id="chartLeadsByOriginDetail"></canvas></div>
+        </div>
+
+        <div class="card col-4">
+          <h3>Leads por UTM Source</h3>
+          <p class="subtitle">Origem do tráfego (UTM)</p>
+          <div class="chart-wrap"><canvas id="chartUtmSourceOrig"></canvas></div>
+        </div>
+        <div class="card col-4">
+          <h3>Leads por UTM Medium</h3>
+          <p class="subtitle">Mídia/posicionamento</p>
+          <div class="chart-wrap"><canvas id="chartUtmMediumOrig"></canvas></div>
+        </div>
+        <div class="card col-4">
+          <h3>Leads por UTM Campaign</h3>
+          <p class="subtitle">Top 10 campanhas (UTM)</p>
+          <div class="chart-wrap"><canvas id="chartUtmCampaignOrig"></canvas></div>
+        </div>
+
+        <div class="card col-12">
+          <div class="card-header">
+            <div>
+              <h3>Meta Ads - Performance por Origem</h3>
+              <p class="subtitle">Todos os leads gerados, escolha a granularidade</p>
+            </div>
+            <div class="pills" data-pills-view="orig" data-pills-platform="meta">
+              <button class="pill active" data-level="campaign">Campanha</button>
+              <button class="pill" data-level="adset">Conjunto</button>
+              <button class="pill" data-level="ad">Criativo</button>
+            </div>
+          </div>
+          <div id="breadcrumbOrigMeta" class="breadcrumb"></div>
+          <div class="scroll-y" id="tableOrigMeta" style="max-height:480px;"></div>
+        </div>
+
+        <div class="card col-12">
+          <div class="card-header">
+            <div>
+              <h3>Google Ads - Performance por Origem</h3>
+              <p class="subtitle">Todos os leads gerados, escolha a granularidade</p>
+            </div>
+            <div class="pills" data-pills-view="orig" data-pills-platform="google">
+              <button class="pill active" data-level="campaign">Campanha</button>
+              <button class="pill" data-level="adset">Grupo</button>
+              <button class="pill" data-level="ad">Anúncio</button>
+            </div>
+          </div>
+          <div id="breadcrumbOrigGoogle" class="breadcrumb"></div>
+          <div class="scroll-y" id="tableOrigGoogle" style="max-height:480px;"></div>
+        </div>
+
+        <div class="card col-12">
+          <h3>Todos os Leads - Detalhe</h3>
+          <p class="subtitle">Lista completa com origem, campanha e criativo</p>
+          <div class="filter-bar" style="margin-bottom:12px;">
+            <input type="text" id="origSearch" class="search-input" placeholder="Buscar por nome, campanha, anúncio..." />
+            <button id="exportOrigBtn" class="export-btn">Exportar CSV</button>
+          </div>
+          <div class="scroll-y" id="tableOrigDetail" style="max-height:500px;"></div>
+        </div>
+      </div>
+    </div><!-- /viewOrigens -->
+
+    <div id="viewConversions" class="hidden">
+      <div class="kpis" id="kpisConv"></div>
+
+      <div class="grid">
+        <div class="card col-6">
+          <h3>Conversões por Origem</h3>
+          <p class="subtitle">De onde vieram os leads que compraram</p>
+          <div class="chart-wrap"><canvas id="chartConvByOrigin"></canvas></div>
+        </div>
+        <div class="card col-6">
+          <h3>Receita por Origem</h3>
+          <p class="subtitle">Valor acumulado por canal</p>
+          <div class="chart-wrap"><canvas id="chartRevByOrigin"></canvas></div>
+        </div>
+
+        <div class="card col-4">
+          <h3>Conversões por UTM Source</h3>
+          <p class="subtitle">Origem do tráfego (UTM)</p>
+          <div class="chart-wrap"><canvas id="chartUtmSource"></canvas></div>
+        </div>
+        <div class="card col-4">
+          <h3>Conversões por UTM Medium</h3>
+          <p class="subtitle">Mídia/posicionamento</p>
+          <div class="chart-wrap"><canvas id="chartUtmMedium"></canvas></div>
+        </div>
+        <div class="card col-4">
+          <h3>Conversões por UTM Campaign</h3>
+          <p class="subtitle">Top 10 campanhas (UTM)</p>
+          <div class="chart-wrap"><canvas id="chartUtmCampaign"></canvas></div>
+        </div>
+
+        <div class="card col-12">
+          <div class="card-header">
+            <div>
+              <h3>Meta Ads - Performance por Conversão</h3>
+              <p class="subtitle">Escolha a granularidade da análise</p>
+            </div>
+            <div class="pills" data-pills-view="conv" data-pills-platform="meta">
+              <button class="pill active" data-level="campaign">Campanha</button>
+              <button class="pill" data-level="adset">Conjunto</button>
+              <button class="pill" data-level="ad">Criativo</button>
+            </div>
+          </div>
+          <div id="breadcrumbConvMeta" class="breadcrumb"></div>
+          <div class="scroll-y" id="tableConvMeta" style="max-height:480px;"></div>
+        </div>
+
+        <div class="card col-12">
+          <div class="card-header">
+            <div>
+              <h3>Google Ads - Performance por Conversão</h3>
+              <p class="subtitle">Escolha a granularidade da análise</p>
+            </div>
+            <div class="pills" data-pills-view="conv" data-pills-platform="google">
+              <button class="pill active" data-level="campaign">Campanha</button>
+              <button class="pill" data-level="adset">Grupo</button>
+              <button class="pill" data-level="ad">Anúncio</button>
+            </div>
+          </div>
+          <div id="breadcrumbConvGoogle" class="breadcrumb"></div>
+          <div class="scroll-y" id="tableConvGoogle" style="max-height:480px;"></div>
+        </div>
+
+        <div class="card col-12">
+          <h3>Leads Convertidos - Detalhe</h3>
+          <p class="subtitle">Cada lead que comprou, com origem, campanha e criativo</p>
+          <div class="filter-bar" style="margin-bottom:12px;">
+            <input type="text" id="convSearch" class="search-input" placeholder="Buscar por nome, campanha, anúncio..." />
+            <button id="exportConvBtn" class="export-btn">Exportar CSV</button>
+          </div>
+          <div class="scroll-y" id="tableConvDetail" style="max-height:500px;"></div>
+        </div>
+      </div>
+    </div><!-- /viewConversions -->
+  </div>
+</main>
+
+<script>
+const PALETTE_LIGHT = [
+  '#0284c7', '#7c3aed', '#16a34a', '#ca8a04', '#dc2626',
+  '#ea580c', '#0891b2', '#c026d3', '#65a30d', '#db2777',
+  '#2563eb', '#d97706', '#059669', '#9333ea', '#be123c'
+];
+const PALETTE_DARK = [
+  '#38bdf8', '#a78bfa', '#4ade80', '#facc15', '#f87171',
+  '#fb923c', '#22d3ee', '#e879f9', '#84cc16', '#f472b6',
+  '#60a5fa', '#fbbf24', '#34d399', '#c084fc', '#fca5a5'
+];
+function getPalette() {
+  return document.documentElement.getAttribute('data-theme') === 'dark' ? PALETTE_DARK : PALETTE_LIGHT;
+}
+
+let rawData = [];
+let charts = {};
+
+function cssVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+function applyChartTheme() {
+  Chart.defaults.color = cssVar('--text');
+  Chart.defaults.borderColor = cssVar('--border');
+}
+Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+
+// Theme toggle
+function setTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  document.getElementById('themeLabel').textContent = theme === 'dark' ? 'Escuro' : 'Claro';
+  localStorage.setItem('rt-theme', theme);
+  applyChartTheme();
+  if (rawData.length) renderAll();
+}
+document.querySelector('.theme-toggle').addEventListener('click', () => {
+  const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  setTheme(next);
+});
+setTheme(localStorage.getItem('rt-theme') || 'light');
+
+const fileInput = document.getElementById('fileInput');
+const fileName = document.getElementById('fileName');
+const dropzone = document.getElementById('dropzone');
+const emptyState = document.getElementById('emptyState');
+const dashboard = document.getElementById('dashboard');
+
+fileInput.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (file) handleFile(file);
+});
+
+['dragover','dragenter'].forEach(ev => dropzone.addEventListener(ev, (e) => {
+  e.preventDefault(); dropzone.classList.add('drag');
+}));
+['dragleave','dragend','drop'].forEach(ev => dropzone.addEventListener(ev, (e) => {
+  e.preventDefault(); dropzone.classList.remove('drag');
+}));
+dropzone.addEventListener('drop', (e) => {
+  const file = e.dataTransfer.files[0];
+  if (file) handleFile(file);
+});
+
+function handleFile(file) {
+  fileName.textContent = file.name;
+  Papa.parse(file, {
+    header: true,
+    skipEmptyLines: true,
+    complete: (results) => {
+      rawData = results.data;
+      initFilters();
+      renderAll();
+      emptyState.classList.add('hidden');
+      dashboard.classList.remove('hidden');
+    },
+    error: (err) => alert('Erro ao ler CSV: ' + err.message)
+  });
+}
+
+function initFilters() {
+  const stages = [...new Set(rawData.map(r => r['Etapa da Jornada']).filter(Boolean))].sort();
+  const sel = document.getElementById('filterStage');
+  sel.innerHTML = '<option value="">Todas</option>' + stages.map(s => `<option value="${s}">${s}</option>`).join('');
+
+  const dates = rawData.map(r => r['Data da Primeira Mensagem']).filter(Boolean).map(d => d.slice(0,10)).sort();
+  if (dates.length) {
+    document.getElementById('dateFrom').min = dates[0];
+    document.getElementById('dateFrom').max = dates[dates.length-1];
+    document.getElementById('dateTo').min = dates[0];
+    document.getElementById('dateTo').max = dates[dates.length-1];
+  }
+
+  ['filterStage','dateFrom','dateTo'].forEach(id =>
+    document.getElementById(id).addEventListener('change', renderAll));
+
+  // Manually changing date inputs switches preset to "custom"
+  ['dateFrom','dateTo'].forEach(id => document.getElementById(id).addEventListener('change', () => {
+    document.getElementById('datePreset').value = 'custom';
+  }));
+
+  document.getElementById('datePreset').addEventListener('change', (e) => {
+    applyDatePreset(e.target.value);
+    renderAll();
+  });
+
+  document.getElementById('clearFilters').addEventListener('click', () => {
+    document.getElementById('filterStage').value = '';
+    document.getElementById('dateFrom').value = '';
+    document.getElementById('dateTo').value = '';
+    document.getElementById('datePreset').value = 'all';
+    renderAll();
+  });
+}
+
+function fmtLocalDate(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function applyDatePreset(preset) {
+  const fromInput = document.getElementById('dateFrom');
+  const toInput = document.getElementById('dateTo');
+  if (preset === 'custom') return; // keep current values
+  if (preset === 'all' || !preset) {
+    fromInput.value = '';
+    toInput.value = '';
+    return;
+  }
+  const today = new Date();
+  let from = new Date(today);
+  let to = new Date(today);
+
+  switch (preset) {
+    case 'today':
+      break;
+    case 'yesterday':
+      from.setDate(today.getDate() - 1);
+      to.setDate(today.getDate() - 1);
+      break;
+    case 'last7':
+      from.setDate(today.getDate() - 6);
+      break;
+    case 'last30':
+      from.setDate(today.getDate() - 29);
+      break;
+    case 'last90':
+      from.setDate(today.getDate() - 89);
+      break;
+    case 'thisMonth':
+      from = new Date(today.getFullYear(), today.getMonth(), 1);
+      break;
+    case 'lastMonth':
+      from = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      to   = new Date(today.getFullYear(), today.getMonth(), 0);
+      break;
+    case 'thisYear':
+      from = new Date(today.getFullYear(), 0, 1);
+      break;
+  }
+  fromInput.value = fmtLocalDate(from);
+  toInput.value = fmtLocalDate(to);
+}
+
+function getFiltered() {
+  const stage = document.getElementById('filterStage').value;
+  const from = document.getElementById('dateFrom').value;
+  const to = document.getElementById('dateTo').value;
+  return rawData.filter(r => {
+    if (stage && r['Etapa da Jornada'] !== stage) return false;
+    const d = (r['Data da Primeira Mensagem'] || '').slice(0,10);
+    if (from && d && d < from) return false;
+    if (to && d && d > to) return false;
+    return true;
+  });
+}
+
+function isTracked(row) {
+  const origem = (row['Origem'] || '').trim();
+  return origem && origem.toLowerCase() !== 'não rastreada' && origem.toLowerCase() !== 'nao rastreada';
+}
+function isConverted(row) {
+  const qty = parseFloat(row['Quantidade de Vendas']);
+  return !isNaN(qty) && qty > 0;
+}
+function parseMoney(v) {
+  const n = parseFloat(v);
+  return isNaN(n) ? 0 : n;
+}
+function fmtMoney(n) {
+  return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+function fmtPct(n) {
+  return (n * 100).toFixed(1).replace('.', ',') + '%';
+}
+
+function groupCount(rows, key) {
+  const map = new Map();
+  rows.forEach(r => {
+    const k = (r[key] || '-').trim() || '-';
+    map.set(k, (map.get(k) || 0) + 1);
+  });
+  return [...map.entries()].sort((a,b) => b[1] - a[1]);
+}
+
+function destroyChart(id) {
+  if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+}
+
+function renderAll() {
+  const rows = getFiltered();
+  renderKPIs(rows);
+  renderDailyVolume(rows);
+  renderTracked(rows);
+  renderOrigin(rows);
+  renderConverted(rows);
+  renderFunnel(rows);
+  renderCampaignTable('tableMeta', rows, 'Nome da Campanha de Anúncio');
+  renderCampaignTable('tableGoogle', rows, 'Nome da Campanha do Anúncio Google');
+  renderOrigensView(rows);
+  renderConversionsView(rows);
+}
+
+function originCategory(origem) {
+  const o = (origem || '').trim().toLowerCase();
+  if (!o || o === 'não rastreada' || o === 'nao rastreada') return 'Não Rastreado';
+  if (o.includes('meta') || o.includes('facebook') || o.includes('instagram')) return 'Meta';
+  if (o.includes('google')) return 'Google';
+  return 'Outras';
+}
+
+function categoryColors() {
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  return isDark
+    ? { 'Meta': '#60a5fa', 'Google': '#4ade80', 'Outras': '#94a3b8', 'Não Rastreado': '#fb923c' }
+    : { 'Meta': '#2563eb', 'Google': '#16a34a', 'Outras': '#94a3b8', 'Não Rastreado': '#ea580c' };
+}
+
+// Maps any label (Origem, utm_source, utm_medium, etc.) to one of the 4 category colors
+function colorForLabel(label) {
+  const c = categoryColors();
+  const l = String(label || '').trim().toLowerCase();
+  if (!l || l === '-' || l === 'não rastreada' || l === 'nao rastreada'
+       || l === 'não rastreado' || l === 'nao rastreado') return c['Não Rastreado'];
+  if (l.includes('meta') || l.includes('facebook') || l.includes('instagram')
+      || l === 'ig' || l === 'fb') return c['Meta'];
+  if (l.includes('google') || l.includes('youtube') || l === 'gads' || l === 'adwords') return c['Google'];
+  return c['Outras'];
+}
+
+function formatDateLabel(iso) {
+  if (!iso || iso.length < 10) return iso;
+  const [y, m, d] = iso.split('-');
+  return `${d}/${m}`;
+}
+
+function renderDailyVolume(rows) {
+  destroyChart('dailyVolume');
+  const byDate = new Map();
+  rows.forEach(r => {
+    const date = (r['Data da Primeira Mensagem'] || '').slice(0, 10);
+    if (!date) return;
+    if (!byDate.has(date)) byDate.set(date, { 'Meta': 0, 'Google': 0, 'Outras': 0, 'Não Rastreado': 0 });
+    byDate.get(date)[originCategory(r['Origem'])] += 1;
+  });
+
+  const dates = [...byDate.keys()].sort();
+  if (dates.length === 0) {
+    drawEmptyChart('chartDailyVolume', 'Sem datas para exibir no filtro atual');
+    return;
+  }
+
+  const colors = categoryColors();
+  const series = ['Meta', 'Google', 'Outras', 'Não Rastreado'];
+  const datasets = series.map(s => ({
+    label: s,
+    data: dates.map(d => byDate.get(d)[s]),
+    backgroundColor: colors[s],
+    borderWidth: 0,
+    borderRadius: 3,
+    borderSkipped: false,
+  }));
+
+  charts.dailyVolume = new Chart(document.getElementById('chartDailyVolume'), {
+    type: 'bar',
+    data: { labels: dates.map(formatDateLabel), datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'top', labels: { boxWidth: 12, boxHeight: 12, padding: 14, usePointStyle: true, pointStyle: 'rectRounded' } },
+        tooltip: {
+          callbacks: {
+            title: (items) => {
+              const idx = items[0].dataIndex;
+              return dates[idx];
+            },
+            footer: (items) => {
+              const total = items.reduce((s, it) => s + it.parsed.y, 0);
+              return 'Total: ' + total;
+            }
+          }
+        }
+      },
+      scales: {
+        x: { stacked: true, grid: { display: false }, ticks: { autoSkip: true, maxRotation: 0 } },
+        y: { stacked: true, grid: { color: cssVar('--border') }, beginAtZero: true, ticks: { precision: 0 } }
+      }
+    }
+  });
+}
+
+function renderKPIs(rows) {
+  const total = rows.length;
+  const tracked = rows.filter(isTracked).length;
+  const converted = rows.filter(isConverted).length;
+  const revenue = rows.reduce((s, r) => s + parseMoney(r['Valor Acumulado']), 0);
+  const sales = rows.reduce((s, r) => s + (parseFloat(r['Quantidade de Vendas']) || 0), 0);
+
+  const kpis = [
+    { label: 'Total de Leads', value: total.toLocaleString('pt-BR'), sub: '' },
+    { label: 'Rastreados', value: tracked.toLocaleString('pt-BR'), sub: total ? fmtPct(tracked/total) + ' do total' : '' },
+    { label: 'Não Rastreados', value: (total-tracked).toLocaleString('pt-BR'), sub: total ? fmtPct((total-tracked)/total) + ' do total' : '' },
+    { label: 'Leads Convertidos', value: converted.toLocaleString('pt-BR'), sub: total ? fmtPct(converted/total) + ' taxa de conversão' : '' },
+    { label: 'Quantidade de Vendas', value: sales.toLocaleString('pt-BR'), sub: '' },
+    { label: 'Receita Acumulada', value: fmtMoney(revenue), sub: '' },
+  ];
+  document.getElementById('kpis').innerHTML = kpis.map(k => `
+    <div class="kpi">
+      <div class="kpi-label">${k.label}</div>
+      <div class="kpi-value">${k.value}</div>
+      <div class="kpi-sub">${k.sub}</div>
+    </div>
+  `).join('');
+}
+
+function renderTracked(rows) {
+  destroyChart('tracked');
+  const tracked = rows.filter(isTracked).length;
+  const notTracked = rows.length - tracked;
+  charts.tracked = new Chart(document.getElementById('chartTracked'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Rastreados', 'Não Rastreados'],
+      datasets: [{
+        data: [tracked, notTracked],
+        backgroundColor: [categoryColors()['Outras'], categoryColors()['Não Rastreado']],
+        borderColor: cssVar('--bg-card'),
+        borderWidth: 2,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom' },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const total = ctx.dataset.data.reduce((a,b)=>a+b, 0);
+              const pct = total ? (ctx.parsed / total * 100).toFixed(1) : 0;
+              return `${ctx.label}: ${ctx.parsed} (${pct}%)`;
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+function renderOrigin(rows) {
+  destroyChart('origin');
+  const groups = groupCount(rows, 'Origem');
+  charts.origin = new Chart(document.getElementById('chartOrigin'), {
+    type: 'bar',
+    data: {
+      labels: groups.map(g => g[0]),
+      datasets: [{
+        label: 'Leads',
+        data: groups.map(g => g[1]),
+        backgroundColor: groups.map(g => colorForLabel(g[0])),
+        borderRadius: 6,
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const total = ctx.dataset.data.reduce((a,b)=>a+b, 0);
+              const pct = total ? (ctx.parsed.x / total * 100).toFixed(1) : 0;
+              return `${ctx.parsed.x} leads (${pct}%)`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: { grid: { color: cssVar('--border') } },
+        y: { grid: { display: false } }
+      }
+    }
+  });
+}
+
+function renderConverted(rows) {
+  destroyChart('converted');
+  const converted = rows.filter(isConverted);
+  const groups = groupCount(converted, 'Origem');
+
+  if (groups.length === 0) {
+    const ctx = document.getElementById('chartConverted').getContext('2d');
+    ctx.clearRect(0,0, ctx.canvas.width, ctx.canvas.height);
+    ctx.fillStyle = cssVar('--text-muted');
+    ctx.font = '14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Nenhum lead convertido no filtro atual', ctx.canvas.width/2, ctx.canvas.height/2);
+    return;
+  }
+
+  charts.converted = new Chart(document.getElementById('chartConverted'), {
+    type: 'pie',
+    data: {
+      labels: groups.map(g => g[0]),
+      datasets: [{
+        data: groups.map(g => g[1]),
+        backgroundColor: groups.map(g => colorForLabel(g[0])),
+        borderColor: cssVar('--bg-card'),
+        borderWidth: 2,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'right' },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const total = ctx.dataset.data.reduce((a,b)=>a+b, 0);
+              const pct = total ? (ctx.parsed / total * 100).toFixed(1) : 0;
+              return `${ctx.label}: ${ctx.parsed} (${pct}%)`;
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+function renderFunnel(rows) {
+  destroyChart('funnel');
+  const groups = groupCount(rows, 'Etapa da Jornada');
+  charts.funnel = new Chart(document.getElementById('chartFunnel'), {
+    type: 'bar',
+    data: {
+      labels: groups.map(g => g[0]),
+      datasets: [{
+        label: 'Leads',
+        data: groups.map(g => g[1]),
+        backgroundColor: groups.map((_, i) => getPalette()[i % getPalette().length]),
+        borderRadius: 6,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => `${ctx.parsed.y} leads`
+          }
+        }
+      },
+      scales: {
+        x: { grid: { display: false } },
+        y: { grid: { color: cssVar('--border') }, beginAtZero: true }
+      }
+    }
+  });
+}
+
+function renderCampaignTable(tableId, rows, campaignKey) {
+  const map = new Map();
+  rows.forEach(r => {
+    const name = (r[campaignKey] || '').trim();
+    if (!name) return;
+    if (!map.has(name)) map.set(name, { leads: 0, sales: 0, revenue: 0 });
+    const entry = map.get(name);
+    entry.leads += 1;
+    entry.sales += parseFloat(r['Quantidade de Vendas']) || 0;
+    entry.revenue += parseMoney(r['Valor Acumulado']);
+  });
+
+  const sorted = [...map.entries()].sort((a,b) => b[1].leads - a[1].leads).slice(0, 25);
+  const container = document.getElementById(tableId);
+
+  if (sorted.length === 0) {
+    container.innerHTML = '<p style="color:var(--text-muted); padding:16px; text-align:center; font-size:13px;">Sem dados de campanhas para o filtro atual.</p>';
+    return;
+  }
+
+  container.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>Campanha</th>
+          <th class="num">Leads</th>
+          <th class="num">Vendas</th>
+          <th class="num">Receita</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${sorted.map(([name, v]) => `
+          <tr>
+            <td>${name}</td>
+            <td class="num">${v.leads}</td>
+            <td class="num">${v.sales || '-'}</td>
+            <td class="num">${v.revenue ? fmtMoney(v.revenue) : '-'}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+// ============================================================
+// Tabs
+// ============================================================
+document.querySelectorAll('.tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const view = btn.dataset.view;
+    document.getElementById('viewOverview').classList.toggle('hidden', view !== 'overview');
+    document.getElementById('viewOrigens').classList.toggle('hidden', view !== 'origens');
+    document.getElementById('viewConversions').classList.toggle('hidden', view !== 'conversions');
+  });
+});
+
+// ============================================================
+// Conversions view
+// ============================================================
+function renderConversionsView(rows) {
+  const converted = rows.filter(isConverted);
+  document.getElementById('convBadge').textContent = converted.length;
+
+  renderConvKPIs(rows, converted);
+  renderConvByOrigin(converted);
+  renderRevByOrigin(converted);
+  renderUtmChart('chartUtmSource', converted, 'utm_source');
+  renderUtmChart('chartUtmMedium', converted, 'utm_medium');
+  renderUtmChart('chartUtmCampaign', converted, 'utm_campaign');
+  renderMetaHierarchy();
+  renderGoogleHierarchy();
+  renderConvDetailTable(converted);
+}
+
+// ============================================================
+// Origens view
+// ============================================================
+function renderOrigensView(rows) {
+  document.getElementById('origBadge').textContent = rows.length;
+
+  renderOrigKPIs(rows);
+  renderLeadsByCategory(rows);
+  renderLeadsByOriginDetail(rows);
+  renderUtmChart('chartUtmSourceOrig',   rows, 'utm_source');
+  renderUtmChart('chartUtmMediumOrig',   rows, 'utm_medium');
+  renderUtmChart('chartUtmCampaignOrig', rows, 'utm_campaign');
+  renderMetaOrigens();
+  renderGoogleOrigens();
+  renderOrigDetailTable(rows);
+}
+
+function renderOrigKPIs(rows) {
+  const total = rows.length;
+  const counts = { 'Meta': 0, 'Google': 0, 'Outras': 0, 'Não Rastreado': 0 };
+  rows.forEach(r => { counts[originCategory(r['Origem'])] += 1; });
+
+  const tracked = total - counts['Não Rastreado'];
+
+  const kpis = [
+    { label: 'Total de Leads',  value: total.toLocaleString('pt-BR'), sub: '' },
+    { label: 'Rastreados',      value: tracked.toLocaleString('pt-BR'), sub: total ? fmtPct(tracked/total) + ' do total' : '' },
+    { label: 'Leads Meta',      value: counts['Meta'].toLocaleString('pt-BR'),    sub: total ? fmtPct(counts['Meta']/total) : '' },
+    { label: 'Leads Google',    value: counts['Google'].toLocaleString('pt-BR'),  sub: total ? fmtPct(counts['Google']/total) : '' },
+    { label: 'Outras Origens',  value: counts['Outras'].toLocaleString('pt-BR'),  sub: total ? fmtPct(counts['Outras']/total) : '' },
+    { label: 'Não Rastreados',  value: counts['Não Rastreado'].toLocaleString('pt-BR'), sub: total ? fmtPct(counts['Não Rastreado']/total) : '' },
+  ];
+  document.getElementById('kpisOrig').innerHTML = kpis.map(k => `
+    <div class="kpi">
+      <div class="kpi-label">${k.label}</div>
+      <div class="kpi-value">${k.value}</div>
+      <div class="kpi-sub">${k.sub}</div>
+    </div>
+  `).join('');
+}
+
+function renderLeadsByCategory(rows) {
+  destroyChart('leadsByCategory');
+  const counts = { 'Meta': 0, 'Google': 0, 'Outras': 0, 'Não Rastreado': 0 };
+  rows.forEach(r => { counts[originCategory(r['Origem'])] += 1; });
+
+  const labels = Object.keys(counts).filter(k => counts[k] > 0);
+  if (labels.length === 0) { drawEmptyChart('chartLeadsByCategory', 'Sem leads no filtro atual'); return; }
+
+  const colors = categoryColors();
+  charts.leadsByCategory = new Chart(document.getElementById('chartLeadsByCategory'), {
+    type: 'doughnut',
+    data: {
+      labels,
+      datasets: [{
+        data: labels.map(l => counts[l]),
+        backgroundColor: labels.map(l => colors[l]),
+        borderColor: cssVar('--bg-card'),
+        borderWidth: 2,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'right' },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const total = ctx.dataset.data.reduce((a,b)=>a+b, 0);
+              const pct = total ? (ctx.parsed / total * 100).toFixed(1) : 0;
+              return `${ctx.label}: ${ctx.parsed} (${pct}%)`;
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+function renderLeadsByOriginDetail(rows) {
+  destroyChart('leadsByOriginDetail');
+  const groups = groupCount(rows, 'Origem');
+  if (groups.length === 0) { drawEmptyChart('chartLeadsByOriginDetail', 'Sem leads no filtro atual'); return; }
+  charts.leadsByOriginDetail = new Chart(document.getElementById('chartLeadsByOriginDetail'), {
+    type: 'bar',
+    data: {
+      labels: groups.map(g => g[0]),
+      datasets: [{
+        label: 'Leads',
+        data: groups.map(g => g[1]),
+        backgroundColor: groups.map(g => colorForLabel(g[0])),
+        borderRadius: 6,
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const total = ctx.dataset.data.reduce((a,b)=>a+b, 0);
+              const pct = total ? (ctx.parsed.x / total * 100).toFixed(1) : 0;
+              return `${ctx.parsed.x} leads (${pct}%)`;
+            }
+          }
+        }
+      },
+      scales: { x: { grid: { color: cssVar('--border') }, ticks: { precision: 0 } }, y: { grid: { display: false } } }
+    }
+  });
+}
+
+let lastOrigDetail = [];
+
+function renderOrigDetailTable(rows) {
+  lastOrigDetail = rows;
+  const search = document.getElementById('origSearch').value.toLowerCase().trim();
+  const filtered = search
+    ? rows.filter(r => {
+        return ['Nome do Contato','Origem','Nome da Campanha de Anúncio','Nome do Anúncio','Nome da Campanha do Anúncio Google','Nome do Anúncio Google','utm_campaign','utm_source']
+          .some(k => (r[k] || '').toLowerCase().includes(search));
+      })
+    : rows;
+
+  const container = document.getElementById('tableOrigDetail');
+  if (filtered.length === 0) {
+    container.innerHTML = '<p style="color:var(--text-muted); padding:16px; text-align:center; font-size:13px;">Nenhum lead' + (search ? ' para a busca atual.' : ' no filtro atual.') + '</p>';
+    return;
+  }
+
+  // Limit to 500 rows for performance; tell user total
+  const cap = 500;
+  const sliced = filtered.slice(0, cap);
+
+  container.innerHTML = `
+    ${filtered.length > cap ? `<p style="color:var(--text-muted); font-size:12px; margin:0 0 8px;">Exibindo os primeiros ${cap} de ${filtered.length} leads. Use a busca ou exporte para ver todos.</p>` : ''}
+    <table>
+      <thead>
+        <tr>
+          <th>Contato</th>
+          <th>Origem</th>
+          <th>Campanha</th>
+          <th>Conjunto/Grupo</th>
+          <th>Anúncio (Criativo)</th>
+          <th>UTM Source</th>
+          <th>Etapa</th>
+          <th>Data</th>
+          <th class="num">Vendas</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${sliced.map(r => {
+          const campanha = r['Nome da Campanha de Anúncio'] || r['Nome da Campanha do Anúncio Google'] || '-';
+          const conjunto = r['Nome do Conjunto de Anúncio'] || r['Nome do Grupo de Anúncio Google'] || '-';
+          const anuncio  = r['Nome do Anúncio'] || r['Nome do Anúncio Google'] || '-';
+          return `
+            <tr>
+              <td>${escapeHtml(r['Nome do Contato'] || '-')}</td>
+              <td>${escapeHtml(r['Origem'] || '-')}</td>
+              <td>${escapeHtml(campanha)}</td>
+              <td>${escapeHtml(conjunto)}</td>
+              <td>${escapeHtml(anuncio)}</td>
+              <td>${escapeHtml(r['utm_source'] || '-')}</td>
+              <td>${escapeHtml(r['Etapa da Jornada'] || '-')}</td>
+              <td>${(r['Data da Primeira Mensagem'] || '').slice(0,10) || '-'}</td>
+              <td class="num">${parseFloat(r['Quantidade de Vendas']) || 0}</td>
+            </tr>
+          `;
+        }).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+document.getElementById('origSearch').addEventListener('input', () => {
+  renderOrigDetailTable(lastOrigDetail);
+});
+
+document.getElementById('exportOrigBtn').addEventListener('click', () => {
+  if (!lastOrigDetail.length) { alert('Nenhum lead para exportar.'); return; }
+  const csv = Papa.unparse(lastOrigDetail.map(r => ({
+    'Contato': r['Nome do Contato'] || '',
+    'WhatsApp': r['WhatsApp do Contato'] || '',
+    'Origem': r['Origem'] || '',
+    'Categoria': originCategory(r['Origem']),
+    'Etapa da Jornada': r['Etapa da Jornada'] || '',
+    'Campanha Meta': r['Nome da Campanha de Anúncio'] || '',
+    'Conjunto Meta': r['Nome do Conjunto de Anúncio'] || '',
+    'Anúncio Meta': r['Nome do Anúncio'] || '',
+    'Campanha Google': r['Nome da Campanha do Anúncio Google'] || '',
+    'Grupo Google': r['Nome do Grupo de Anúncio Google'] || '',
+    'Anúncio Google': r['Nome do Anúncio Google'] || '',
+    'utm_source': r['utm_source'] || '',
+    'utm_medium': r['utm_medium'] || '',
+    'utm_campaign': r['utm_campaign'] || '',
+    'utm_content': r['utm_content'] || '',
+    'Quantidade de Vendas': r['Quantidade de Vendas'] || '',
+    'Valor Acumulado': r['Valor Acumulado'] || '',
+    'Data Primeira Mensagem': r['Data da Primeira Mensagem'] || '',
+    'Data Última Venda': r['Data da Última Venda'] || '',
+  })));
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'leads-origens-' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+function renderConvKPIs(allRows, converted) {
+  const totalLeads = allRows.length;
+  const totalConv = converted.length;
+  const totalSales = converted.reduce((s, r) => s + (parseFloat(r['Quantidade de Vendas']) || 0), 0);
+  const revenue = converted.reduce((s, r) => s + parseMoney(r['Valor Acumulado']), 0);
+  const ticket = totalSales ? revenue / totalSales : 0;
+  const trackedConv = converted.filter(isTracked).length;
+
+  const kpis = [
+    { label: 'Leads Convertidos', value: totalConv.toLocaleString('pt-BR'), sub: totalLeads ? fmtPct(totalConv/totalLeads) + ' taxa de conversão' : '' },
+    { label: 'Vendas Totais', value: totalSales.toLocaleString('pt-BR'), sub: '' },
+    { label: 'Receita Total', value: fmtMoney(revenue), sub: '' },
+    { label: 'Ticket Médio', value: fmtMoney(ticket), sub: 'por venda' },
+    { label: 'Convertidos Rastreados', value: trackedConv.toLocaleString('pt-BR'), sub: totalConv ? fmtPct(trackedConv/totalConv) + ' com origem' : '' },
+    { label: 'Convertidos s/ Rastreio', value: (totalConv-trackedConv).toLocaleString('pt-BR'), sub: totalConv ? fmtPct((totalConv-trackedConv)/totalConv) + ' sem origem' : '' },
+  ];
+  document.getElementById('kpisConv').innerHTML = kpis.map(k => `
+    <div class="kpi">
+      <div class="kpi-label">${k.label}</div>
+      <div class="kpi-value">${k.value}</div>
+      <div class="kpi-sub">${k.sub}</div>
+    </div>
+  `).join('');
+}
+
+function renderConvByOrigin(converted) {
+  destroyChart('convByOrigin');
+  const groups = groupCount(converted, 'Origem');
+  if (groups.length === 0) { drawEmptyChart('chartConvByOrigin', 'Nenhuma conversão no filtro atual'); return; }
+  charts.convByOrigin = new Chart(document.getElementById('chartConvByOrigin'), {
+    type: 'bar',
+    data: {
+      labels: groups.map(g => g[0]),
+      datasets: [{
+        label: 'Conversões',
+        data: groups.map(g => g[1]),
+        backgroundColor: groups.map(g => colorForLabel(g[0])),
+        borderRadius: 6,
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const total = ctx.dataset.data.reduce((a,b)=>a+b, 0);
+              const pct = total ? (ctx.parsed.x / total * 100).toFixed(1) : 0;
+              return `${ctx.parsed.x} conversões (${pct}%)`;
+            }
+          }
+        }
+      },
+      scales: { x: { grid: { color: cssVar('--border') } }, y: { grid: { display: false } } }
+    }
+  });
+}
+
+function renderRevByOrigin(converted) {
+  destroyChart('revByOrigin');
+  const map = new Map();
+  converted.forEach(r => {
+    const k = (r['Origem'] || '-').trim() || '-';
+    map.set(k, (map.get(k) || 0) + parseMoney(r['Valor Acumulado']));
+  });
+  const groups = [...map.entries()].filter(g => g[1] > 0).sort((a,b) => b[1] - a[1]);
+  if (groups.length === 0) { drawEmptyChart('chartRevByOrigin', 'Sem dados de receita'); return; }
+  charts.revByOrigin = new Chart(document.getElementById('chartRevByOrigin'), {
+    type: 'doughnut',
+    data: {
+      labels: groups.map(g => g[0]),
+      datasets: [{
+        data: groups.map(g => g[1]),
+        backgroundColor: groups.map(g => colorForLabel(g[0])),
+        borderColor: cssVar('--bg-card'),
+        borderWidth: 2,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'right' },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const total = ctx.dataset.data.reduce((a,b)=>a+b, 0);
+              const pct = total ? (ctx.parsed / total * 100).toFixed(1) : 0;
+              return `${ctx.label}: ${fmtMoney(ctx.parsed)} (${pct}%)`;
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+function renderUtmChart(canvasId, converted, key) {
+  const chartKey = canvasId;
+  destroyChart(chartKey);
+  const groups = groupCount(converted.filter(r => (r[key] || '').trim()), key).slice(0, 10);
+  if (groups.length === 0) { drawEmptyChart(canvasId, 'Sem dados de ' + key); return; }
+  charts[chartKey] = new Chart(document.getElementById(canvasId), {
+    type: 'bar',
+    data: {
+      labels: groups.map(g => g[0]),
+      datasets: [{
+        label: 'Conversões',
+        data: groups.map(g => g[1]),
+        backgroundColor: groups.map(g => colorForLabel(g[0])),
+        borderRadius: 6,
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { x: { grid: { color: cssVar('--border') }, beginAtZero: true, ticks: { precision: 0 } }, y: { grid: { display: false } } }
+    }
+  });
+}
+
+function drawEmptyChart(canvasId, msg) {
+  const canvas = document.getElementById(canvasId);
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = cssVar('--text-muted');
+  ctx.font = '13px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(msg, canvas.width/2, canvas.height/2);
+}
+
+function rateBadge(rate) {
+  const pct = (rate * 100).toFixed(1).replace('.', ',') + '%';
+  let cls = 'rate-low';
+  if (rate >= 0.1) cls = 'rate-high';
+  else if (rate >= 0.03) cls = 'rate-mid';
+  return `<span class="rate-cell ${cls}">${pct}</span>`;
+}
+
+// State per view ('conv' = conversions, 'orig' = origens) per platform
+const granularityState = {
+  conv: { meta: 'campaign', google: 'campaign' },
+  orig: { meta: 'campaign', google: 'campaign' },
+};
+const sortState = {
+  conv: { meta: { col: 'conv',  dir: 'desc' }, google: { col: 'conv',  dir: 'desc' } },
+  orig: { meta: { col: 'leads', dir: 'desc' }, google: { col: 'leads', dir: 'desc' } },
+};
+// Drill-down filters per view per platform: { campaign?: string, adset?: string }
+const drillFilter = {
+  conv: { meta: {}, google: {} },
+  orig: { meta: {}, google: {} },
+};
+
+// Container IDs for tables and breadcrumbs by view/platform
+function containerIds(view, platform) {
+  const cap = platform === 'meta' ? 'Meta' : 'Google';
+  const prefix = view === 'conv' ? 'Conv' : 'Orig';
+  return { table: `table${prefix}${cap}`, breadcrumb: `breadcrumb${prefix}${cap}` };
+}
+
+const PLATFORM_KEYS = {
+  meta: {
+    campaign: 'Nome da Campanha de Anúncio',
+    adset:    'Nome do Conjunto de Anúncio',
+    ad:       'Nome do Anúncio',
+    parentLabel: { adset: 'Campanha', ad: 'Conjunto' }
+  },
+  google: {
+    campaign: 'Nome da Campanha do Anúncio Google',
+    adset:    'Nome do Grupo de Anúncio Google',
+    ad:       'Nome do Anúncio Google',
+    parentLabel: { adset: 'Campanha', ad: 'Grupo' }
+  }
+};
+
+function aggregateBy(allRows, converted, nameKey, parentKey) {
+  // Aggregate leads (all rows) and conv/sales/revenue (converted) by nameKey
+  const map = new Map();
+  allRows.forEach(r => {
+    const name = (r[nameKey] || '').trim();
+    if (!name) return;
+    if (!map.has(name)) map.set(name, { name, parent: '', leads: 0, conv: 0, sales: 0, revenue: 0 });
+    const entry = map.get(name);
+    entry.leads += 1;
+    if (parentKey) {
+      const p = (r[parentKey] || '').trim();
+      if (p && !entry.parent) entry.parent = p;
+    }
+  });
+  converted.forEach(r => {
+    const name = (r[nameKey] || '').trim();
+    if (!name) return;
+    if (!map.has(name)) map.set(name, { name, parent: '', leads: 0, conv: 0, sales: 0, revenue: 0 });
+    const entry = map.get(name);
+    entry.conv += 1;
+    entry.sales += parseFloat(r['Quantidade de Vendas']) || 0;
+    entry.revenue += parseMoney(r['Valor Acumulado']);
+    if (parentKey && !entry.parent) {
+      const p = (r[parentKey] || '').trim();
+      if (p) entry.parent = p;
+    }
+  });
+  return [...map.values()];
+}
+
+function renderBreadcrumb(view, platform) {
+  const { breadcrumb: containerId } = containerIds(view, platform);
+  const container = document.getElementById(containerId);
+  const filter = drillFilter[view][platform];
+  const adsetLabel = platform === 'meta' ? 'Conjunto' : 'Grupo';
+
+  if (!filter.campaign && !filter.adset) {
+    container.innerHTML = '';
+    return;
+  }
+
+  let html = '<span class="crumb-label">Filtrado por:</span>';
+  if (filter.campaign) {
+    html += `<span class="crumb">
+      <span class="crumb-label">Campanha:</span> ${escapeHtml(filter.campaign)}
+      <button class="crumb-clear" data-view="${view}" data-platform="${platform}" data-clear="campaign" title="Limpar filtro">×</button>
+    </span>`;
+  }
+  if (filter.adset) {
+    html += `<span class="crumb">
+      <span class="crumb-label">${adsetLabel}:</span> ${escapeHtml(filter.adset)}
+      <button class="crumb-clear" data-view="${view}" data-platform="${platform}" data-clear="adset" title="Limpar filtro">×</button>
+    </span>`;
+  }
+  container.innerHTML = html;
+
+  container.querySelectorAll('.crumb-clear').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const v = btn.dataset.view;
+      const p = btn.dataset.platform;
+      const lvl = btn.dataset.clear;
+      if (lvl === 'campaign') {
+        drillFilter[v][p] = {};
+        granularityState[v][p] = 'campaign';
+      } else if (lvl === 'adset') {
+        delete drillFilter[v][p].adset;
+        granularityState[v][p] = 'adset';
+      }
+      updatePillsActive(v, p);
+      renderPlatformTable(v, p);
+    });
+  });
+}
+
+function updatePillsActive(view, platform) {
+  const group = document.querySelector(`.pills[data-pills-view="${view}"][data-pills-platform="${platform}"]`);
+  if (!group) return;
+  group.querySelectorAll('.pill').forEach(b => {
+    b.classList.toggle('active', b.dataset.level === granularityState[view][platform]);
+  });
+}
+
+function applyDrillFilter(view, platform, rows) {
+  const filter = drillFilter[view][platform];
+  const keys = PLATFORM_KEYS[platform];
+  return rows.filter(r => {
+    if (filter.campaign && (r[keys.campaign] || '').trim() !== filter.campaign) return false;
+    if (filter.adset && (r[keys.adset] || '').trim() !== filter.adset) return false;
+    return true;
+  });
+}
+
+function renderPlatformTable(view, platform) {
+  const { table: containerId } = containerIds(view, platform);
+  const container = document.getElementById(containerId);
+  const keys = PLATFORM_KEYS[platform];
+  const level = granularityState[view][platform];
+  const nameKey = keys[level];
+  const parentKey = level === 'campaign' ? null : (level === 'adset' ? keys.campaign : keys.adset);
+  const parentLabel = keys.parentLabel[level];
+  const canDrill = level !== 'ad';
+
+  renderBreadcrumb(view, platform);
+
+  const filteredAll = applyDrillFilter(view, platform, getFiltered());
+  const filteredConverted = filteredAll.filter(isConverted);
+
+  let rows = aggregateBy(filteredAll, filteredConverted, nameKey, parentKey);
+  // Conv view: only rows with conversions; Orig view: all rows with leads
+  rows = view === 'conv' ? rows.filter(r => r.conv > 0) : rows.filter(r => r.leads > 0);
+
+  if (rows.length === 0) {
+    const msg = view === 'conv' ? 'Nenhuma conversão atribuída neste nível.' : 'Nenhum lead atribuído neste nível.';
+    container.innerHTML = `<p style="color:var(--text-muted); padding:16px; text-align:center; font-size:13px;">${msg}</p>`;
+    return;
+  }
+
+  const s = sortState[view][platform];
+  rows.sort((a, b) => {
+    let av = a[s.col], bv = b[s.col];
+    if (s.col === 'rate') { av = a.leads ? a.conv/a.leads : 0; bv = b.leads ? b.conv/b.leads : 0; }
+    if (s.col === 'name' || s.col === 'parent') {
+      return s.dir === 'asc' ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av));
+    }
+    return s.dir === 'asc' ? av - bv : bv - av;
+  });
+
+  const levelLabel = level === 'campaign' ? 'Campanha' : (level === 'adset' ? (platform === 'meta' ? 'Conjunto' : 'Grupo') : (platform === 'meta' ? 'Criativo' : 'Anúncio'));
+
+  const sortClass = (col) => s.col === col ? (s.dir === 'asc' ? 'sortable sort-asc' : 'sortable sort-desc') : 'sortable';
+  const totalLeads = rows.reduce((a, r) => a + r.leads, 0);
+  const totalConv  = rows.reduce((a, r) => a + r.conv,  0);
+  const shareTotal = view === 'conv' ? totalConv : totalLeads;
+  const shareKey   = view === 'conv' ? 'conv' : 'leads';
+
+  let html = `<table>
+    <thead>
+      <tr>
+        <th class="${sortClass('name')}" data-col="name">${levelLabel}${canDrill ? ' <span style="color:var(--text-muted); font-weight:400; font-size:10px;">(clique p/ aprofundar)</span>' : ''}</th>
+        ${parentKey ? `<th class="${sortClass('parent')}" data-col="parent">${parentLabel}</th>` : ''}
+        <th class="num ${sortClass('leads')}" data-col="leads">Leads</th>
+        <th class="num ${sortClass('conv')}" data-col="conv">Conversões</th>
+        <th class="num">% do Total</th>
+        <th class="num ${sortClass('rate')}" data-col="rate">Taxa</th>
+        <th class="num ${sortClass('sales')}" data-col="sales">Vendas</th>
+        <th class="num ${sortClass('revenue')}" data-col="revenue">Receita</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rows.map(r => {
+        const rate = r.leads ? r.conv / r.leads : 0;
+        const share = shareTotal ? r[shareKey] / shareTotal : 0;
+        const drillAttr = canDrill ? `data-drill-name="${escapeHtml(r.name).replace(/"/g,'&quot;')}"` : '';
+        const leadsCell = view === 'orig'
+          ? `<td class="num" style="font-weight:600;">${r.leads}</td>`
+          : `<td class="num">${r.leads}</td>`;
+        const convCell = view === 'conv'
+          ? `<td class="num" style="font-weight:600;">${r.conv}</td>`
+          : `<td class="num">${r.conv}</td>`;
+        return `<tr class="${canDrill ? 'drillable' : ''}" ${drillAttr}>
+          <td>${escapeHtml(r.name)}</td>
+          ${parentKey ? `<td style="color:var(--text-muted); font-size:12px;">${escapeHtml(r.parent || '-')}</td>` : ''}
+          ${leadsCell}
+          ${convCell}
+          <td class="num" style="color:var(--text-muted);">${fmtPct(share)}</td>
+          <td class="num">${rateBadge(rate)}</td>
+          <td class="num">${r.sales || '-'}</td>
+          <td class="num">${r.revenue ? fmtMoney(r.revenue) : '-'}</td>
+        </tr>`;
+      }).join('')}
+    </tbody>
+  </table>`;
+
+  container.innerHTML = html;
+
+  container.querySelectorAll('th.sortable').forEach(th => {
+    th.addEventListener('click', () => {
+      const col = th.dataset.col;
+      if (sortState[view][platform].col === col) {
+        sortState[view][platform].dir = sortState[view][platform].dir === 'asc' ? 'desc' : 'asc';
+      } else {
+        sortState[view][platform].col = col;
+        sortState[view][platform].dir = (col === 'name' || col === 'parent') ? 'asc' : 'desc';
+      }
+      renderPlatformTable(view, platform);
+    });
+  });
+
+  if (canDrill) {
+    container.querySelectorAll('tr.drillable').forEach(tr => {
+      tr.addEventListener('click', () => {
+        const name = tr.dataset.drillName;
+        if (level === 'campaign') {
+          drillFilter[view][platform].campaign = name;
+          granularityState[view][platform] = 'adset';
+        } else if (level === 'adset') {
+          drillFilter[view][platform].adset = name;
+          granularityState[view][platform] = 'ad';
+        }
+        updatePillsActive(view, platform);
+        renderPlatformTable(view, platform);
+      });
+    });
+  }
+}
+
+function renderMetaHierarchy()   { renderPlatformTable('conv', 'meta'); }
+function renderGoogleHierarchy() { renderPlatformTable('conv', 'google'); }
+function renderMetaOrigens()     { renderPlatformTable('orig', 'meta'); }
+function renderGoogleOrigens()   { renderPlatformTable('orig', 'google'); }
+
+// Granularity pill handlers - manual switch clears the drill filter
+document.querySelectorAll('.pills[data-pills-view]').forEach(group => {
+  const view = group.dataset.pillsView;
+  const platform = group.dataset.pillsPlatform;
+  group.querySelectorAll('.pill').forEach(btn => {
+    btn.addEventListener('click', () => {
+      group.querySelectorAll('.pill').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      granularityState[view][platform] = btn.dataset.level;
+      drillFilter[view][platform] = {};
+      renderPlatformTable(view, platform);
+    });
+  });
+});
+
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, ch => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[ch]));
+}
+
+let lastConvDetail = [];
+
+function renderConvDetailTable(converted) {
+  lastConvDetail = converted;
+  const search = document.getElementById('convSearch').value.toLowerCase().trim();
+  const filtered = search
+    ? converted.filter(r => {
+        return ['Nome do Contato','Origem','Nome da Campanha de Anúncio','Nome do Anúncio','Nome da Campanha do Anúncio Google','Nome do Anúncio Google','utm_campaign']
+          .some(k => (r[k] || '').toLowerCase().includes(search));
+      })
+    : converted;
+
+  const container = document.getElementById('tableConvDetail');
+  if (filtered.length === 0) {
+    container.innerHTML = '<p style="color:var(--text-muted); padding:16px; text-align:center; font-size:13px;">Nenhum lead convertido' + (search ? ' para a busca atual.' : ' no filtro atual.') + '</p>';
+    return;
+  }
+
+  const sorted = [...filtered].sort((a,b) => parseMoney(b['Valor Acumulado']) - parseMoney(a['Valor Acumulado']));
+
+  container.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>Contato</th>
+          <th>Origem</th>
+          <th>Campanha</th>
+          <th>Conjunto/Grupo</th>
+          <th>Anúncio (Criativo)</th>
+          <th>UTM Source</th>
+          <th class="num">Vendas</th>
+          <th class="num">Receita</th>
+          <th>Última venda</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${sorted.map(r => {
+          const campanha = r['Nome da Campanha de Anúncio'] || r['Nome da Campanha do Anúncio Google'] || '-';
+          const conjunto = r['Nome do Conjunto de Anúncio'] || r['Nome do Grupo de Anúncio Google'] || '-';
+          const anuncio  = r['Nome do Anúncio'] || r['Nome do Anúncio Google'] || '-';
+          return `
+            <tr>
+              <td>${escapeHtml(r['Nome do Contato'] || '-')}</td>
+              <td>${escapeHtml(r['Origem'] || '-')}</td>
+              <td>${escapeHtml(campanha)}</td>
+              <td>${escapeHtml(conjunto)}</td>
+              <td>${escapeHtml(anuncio)}</td>
+              <td>${escapeHtml(r['utm_source'] || '-')}</td>
+              <td class="num">${parseFloat(r['Quantidade de Vendas']) || 0}</td>
+              <td class="num">${fmtMoney(parseMoney(r['Valor Acumulado']))}</td>
+              <td>${(r['Data da Última Venda'] || '').slice(0,10) || '-'}</td>
+            </tr>
+          `;
+        }).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+document.getElementById('convSearch').addEventListener('input', () => {
+  renderConvDetailTable(lastConvDetail);
+});
+
+document.getElementById('exportConvBtn').addEventListener('click', () => {
+  if (!lastConvDetail.length) { alert('Nenhum lead convertido para exportar.'); return; }
+  const csv = Papa.unparse(lastConvDetail.map(r => ({
+    'Contato': r['Nome do Contato'] || '',
+    'WhatsApp': r['WhatsApp do Contato'] || '',
+    'Origem': r['Origem'] || '',
+    'Campanha Meta': r['Nome da Campanha de Anúncio'] || '',
+    'Conjunto Meta': r['Nome do Conjunto de Anúncio'] || '',
+    'Anúncio Meta': r['Nome do Anúncio'] || '',
+    'Campanha Google': r['Nome da Campanha do Anúncio Google'] || '',
+    'Grupo Google': r['Nome do Grupo de Anúncio Google'] || '',
+    'Anúncio Google': r['Nome do Anúncio Google'] || '',
+    'utm_source': r['utm_source'] || '',
+    'utm_medium': r['utm_medium'] || '',
+    'utm_campaign': r['utm_campaign'] || '',
+    'utm_content': r['utm_content'] || '',
+    'Quantidade de Vendas': r['Quantidade de Vendas'] || '',
+    'Valor Acumulado': r['Valor Acumulado'] || '',
+    'Data Primeira Mensagem': r['Data da Primeira Mensagem'] || '',
+    'Data Última Venda': r['Data da Última Venda'] || '',
+  })));
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'leads-convertidos-' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+});
+</script>
+</body>
+</html>

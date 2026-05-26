@@ -1,0 +1,12 @@
+# Dados de exemplo / planilhas reais (privadas)
+*.csv
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+
+# Node (caso instale wrangler localmente)
+node_modules/
