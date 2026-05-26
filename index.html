@@ -374,6 +374,7 @@
     <span id="fileName" class="file-name">Nenhum arquivo carregado</span>
     <input type="file" id="fileInput" accept=".csv,text/csv" hidden />
     <label class="file-label" for="fileInput">Carregar CSV</label>
+    <button id="clearCacheBtn" class="hidden" style="background:var(--bg-card); border:1px solid var(--border); color:var(--text); padding:8px 14px; border-radius:6px; cursor:pointer; font-size:13px;" title="Apaga os dados em cache e volta à tela de upload">Limpar dados</button>
   </div>
 </header>
 
@@ -715,20 +716,87 @@ dropzone.addEventListener('drop', (e) => {
 });
 
 function handleFile(file) {
-  fileName.textContent = file.name;
   Papa.parse(file, {
     header: true,
     skipEmptyLines: true,
     complete: (results) => {
       rawData = results.data;
+      saveCache(file.name, results.data);
+      setFileLabel(file.name, new Date().toISOString());
       initFilters();
       renderAll();
       emptyState.classList.add('hidden');
       dashboard.classList.remove('hidden');
+      document.getElementById('clearCacheBtn').classList.remove('hidden');
     },
     error: (err) => alert('Erro ao ler CSV: ' + err.message)
   });
 }
+
+// Cache do CSV no localStorage
+const CACHE_KEYS = { name: 'rt-cache-name', date: 'rt-cache-date', data: 'rt-cache-data' };
+
+function saveCache(name, data) {
+  try {
+    localStorage.setItem(CACHE_KEYS.name, name);
+    localStorage.setItem(CACHE_KEYS.date, new Date().toISOString());
+    localStorage.setItem(CACHE_KEYS.data, JSON.stringify(data));
+    return true;
+  } catch (e) {
+    console.warn('Não foi possível salvar o cache (quota excedida?):', e);
+    alert('O arquivo é grande demais para ser armazenado em cache no navegador. Os dados estão carregados nesta sessão, mas você precisará re-carregar ao abrir a página de novo.');
+    return false;
+  }
+}
+
+function loadCache() {
+  try {
+    const name = localStorage.getItem(CACHE_KEYS.name);
+    const date = localStorage.getItem(CACHE_KEYS.date);
+    const dataStr = localStorage.getItem(CACHE_KEYS.data);
+    if (!name || !dataStr) return null;
+    return { name, date, data: JSON.parse(dataStr) };
+  } catch (e) {
+    return null;
+  }
+}
+
+function clearCache() {
+  Object.values(CACHE_KEYS).forEach(k => localStorage.removeItem(k));
+}
+
+function setFileLabel(name, isoDate) {
+  let label = name;
+  if (isoDate) {
+    const d = new Date(isoDate);
+    const dateStr = d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    label += ` • ${dateStr}`;
+  }
+  fileName.textContent = label;
+}
+
+document.getElementById('clearCacheBtn').addEventListener('click', () => {
+  if (!confirm('Limpar os dados em cache e voltar à tela de upload?')) return;
+  clearCache();
+  rawData = [];
+  fileName.textContent = 'Nenhum arquivo carregado';
+  emptyState.classList.remove('hidden');
+  dashboard.classList.add('hidden');
+  document.getElementById('clearCacheBtn').classList.add('hidden');
+});
+
+// Restauração automática ao carregar a página
+(function restoreFromCache() {
+  const cached = loadCache();
+  if (!cached) return;
+  rawData = cached.data;
+  setFileLabel(cached.name, cached.date);
+  initFilters();
+  renderAll();
+  emptyState.classList.add('hidden');
+  dashboard.classList.remove('hidden');
+  document.getElementById('clearCacheBtn').classList.remove('hidden');
+})();
 
 function initFilters() {
   const stages = [...new Set(rawData.map(r => r['Etapa da Jornada']).filter(Boolean))].sort();
