@@ -96,6 +96,22 @@
     transition: opacity 0.15s;
   }
   .file-label:hover { opacity: 0.85; }
+  .clear-cache-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    padding: 10px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.15s;
+  }
+  .clear-cache-btn:hover {
+    border-color: var(--red);
+    color: var(--red);
+    background: rgba(220, 38, 38, 0.05);
+  }
   .file-name { color: var(--text-muted); font-size: 13px; }
   main { padding: 24px 32px 64px; max-width: 1400px; margin: 0 auto; }
 
@@ -374,7 +390,7 @@
     <span id="fileName" class="file-name">Nenhum arquivo carregado</span>
     <input type="file" id="fileInput" accept=".csv,text/csv" hidden />
     <label class="file-label" for="fileInput">Carregar CSV</label>
-    <button id="clearCacheBtn" class="hidden" style="background:var(--bg-card); border:1px solid var(--border); color:var(--text); padding:8px 14px; border-radius:6px; cursor:pointer; font-size:13px;" title="Apaga os dados em cache e volta à tela de upload">Limpar dados</button>
+    <button id="clearCacheBtn" class="clear-cache-btn hidden" title="Apaga os dados em cache e volta à tela de upload">Limpar cache</button>
   </div>
 </header>
 
