@@ -788,14 +788,23 @@ document.getElementById('clearCacheBtn').addEventListener('click', () => {
 // Restauração automática ao carregar a página
 (function restoreFromCache() {
   const cached = loadCache();
-  if (!cached) return;
+  if (!cached || !Array.isArray(cached.data) || cached.data.length === 0) return;
+
   rawData = cached.data;
   setFileLabel(cached.name, cached.date);
-  initFilters();
-  renderAll();
+
+  // Alterna a visibilidade ANTES de renderizar — assim, mesmo que a renderização falhe,
+  // o usuário cai no dashboard e não fica preso na tela de upload.
   emptyState.classList.add('hidden');
   dashboard.classList.remove('hidden');
   document.getElementById('clearCacheBtn').classList.remove('hidden');
+
+  try {
+    initFilters();
+    renderAll();
+  } catch (e) {
+    console.error('Erro ao restaurar do cache:', e);
+  }
 })();
 
 function initFilters() {
