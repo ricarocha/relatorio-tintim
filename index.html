@@ -112,6 +112,33 @@
     color: var(--red);
     background: rgba(220, 38, 38, 0.05);
   }
+
+  .account-banner {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 32px;
+    background: var(--accent-soft-2);
+    border-bottom: 1px solid var(--border);
+  }
+  .account-banner-label {
+    color: var(--text-muted);
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    font-weight: 500;
+  }
+  .account-banner-name {
+    color: var(--accent);
+    font-weight: 700;
+    font-size: 20px;
+    letter-spacing: -0.2px;
+  }
+  .account-banner-extra {
+    margin-left: auto;
+    color: var(--text-muted);
+    font-size: 12px;
+  }
   .file-name { color: var(--text-muted); font-size: 13px; }
   main { padding: 24px 32px 64px; max-width: 1400px; margin: 0 auto; }
 
@@ -394,6 +421,12 @@
   </div>
 </header>
 
+<div id="accountBanner" class="account-banner hidden">
+  <span class="account-banner-label">Conta</span>
+  <span class="account-banner-name" id="accountName"></span>
+  <span class="account-banner-extra" id="accountExtra"></span>
+</div>
+
 <main>
   <div id="emptyState" class="empty-state">
     <label class="dropzone" id="dropzone" for="fileInput">
@@ -444,7 +477,7 @@
 
       <div class="card col-12">
         <h3>Leads por Estado</h3>
-        <p class="subtitle">Estado inferido pelo DDD do WhatsApp, segmentado por categoria de origem</p>
+        <p class="subtitle">Estado inferido pelo DDD do WhatsApp (top 9 + Outros)</p>
         <div class="chart-wrap" style="min-height:420px;"><canvas id="chartLeadsByState"></canvas></div>
       </div>
 
@@ -833,6 +866,27 @@ function clearCache() {
   Object.values(CACHE_KEYS).forEach(k => localStorage.removeItem(k));
 }
 
+function updateAccountBanner() {
+  const banner = document.getElementById('accountBanner');
+  const counts = new Map();
+  rawData.forEach(r => {
+    const name = (r['Nome da Conta'] || '').trim();
+    if (name) counts.set(name, (counts.get(name) || 0) + 1);
+  });
+  if (counts.size === 0) {
+    banner.classList.add('hidden');
+    return;
+  }
+  const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  const [mainName] = sorted[0];
+  document.getElementById('accountName').textContent = mainName;
+  const extra = sorted.length > 1
+    ? `+ ${sorted.length - 1} ${sorted.length - 1 === 1 ? 'outra conta' : 'outras contas'} no arquivo`
+    : '';
+  document.getElementById('accountExtra').textContent = extra;
+  banner.classList.remove('hidden');
+}
+
 function setFileLabel(name, isoDate) {
   let label = name;
   if (isoDate) {
@@ -851,6 +905,7 @@ document.getElementById('clearCacheBtn').addEventListener('click', () => {
   emptyState.classList.remove('hidden');
   dashboard.classList.add('hidden');
   document.getElementById('clearCacheBtn').classList.add('hidden');
+  document.getElementById('accountBanner').classList.add('hidden');
 });
 
 // Restauração automática ao carregar a página
@@ -1008,6 +1063,7 @@ function destroyChart(id) {
 
 function renderAll() {
   const rows = getFiltered();
+  updateAccountBanner();
   renderKPIs(rows);
   renderDailyVolume(rows);
   renderLeadsByState(rows);
@@ -1118,54 +1174,74 @@ function renderLeadsByState(rows) {
   const byState = new Map();
   rows.forEach(r => {
     const state = stateFromPhone(r['WhatsApp do Contato']);
-    if (!byState.has(state)) byState.set(state, { 'Meta': 0, 'Google': 0, 'Outras': 0, 'Não Rastreado': 0 });
-    byState.get(state)[originCategory(r['Origem'])] += 1;
+    byState.set(state, (byState.get(state) || 0) + 1);
   });
 
-  const sumOf = (obj) => Object.values(obj).reduce((a, b) => a + b, 0);
-  const entries = [...byState.entries()].sort((a, b) => sumOf(b[1]) - sumOf(a[1]));
-
-  if (entries.length === 0) {
+  const sorted = [...byState.entries()].sort((a, b) => b[1] - a[1]);
+  if (sorted.length === 0) {
     drawEmptyChart('chartLeadsByState', 'Sem dados de telefone para inferir o estado');
     return;
   }
 
-  const colors = categoryColors();
-  const series = ['Meta', 'Google', 'Outras', 'Não Rastreado'];
-  const datasets = series.map(s => ({
-    label: s,
-    data: entries.map(([_, counts]) => counts[s]),
-    backgroundColor: colors[s],
-    borderWidth: 0,
-    borderRadius: 3,
-    borderSkipped: false,
-  }));
+  // Top 9 + Outros
+  const MAX_SLICES = 9;
+  const top = sorted.slice(0, MAX_SLICES);
+  const rest = sorted.slice(MAX_SLICES);
+  const restTotal = rest.reduce((s, [, n]) => s + n, 0);
+  const labels = top.map(([s]) => s);
+  const data   = top.map(([, n]) => n);
+  if (restTotal > 0) {
+    labels.push('Outros');
+    data.push(restTotal);
+  }
+
+  const palette = getPalette();
+  const backgroundColor = labels.map((l, i) => l === 'Outros' ? categoryColors()['Outras'] : palette[i % palette.length]);
 
   charts.leadsByState = new Chart(document.getElementById('chartLeadsByState'), {
-    type: 'bar',
-    data: { labels: entries.map(e => e[0]), datasets },
+    type: 'pie',
+    data: {
+      labels,
+      datasets: [{
+        data,
+        backgroundColor,
+        borderColor: cssVar('--bg-card'),
+        borderWidth: 2,
+      }]
+    },
     options: {
-      indexAxis: 'y',
       responsive: true,
       maintainAspectRatio: false,
-      interaction: { mode: 'index', intersect: false },
-      layout: { padding: { right: 36 } },
       plugins: {
-        legend: { position: 'top', labels: { boxWidth: 12, boxHeight: 12, padding: 14, usePointStyle: true, pointStyle: 'rectRounded' } },
-        datalabels: datalabelsForStackTotal('horizontal'),
+        legend: { position: 'right', labels: { boxWidth: 12, boxHeight: 12, padding: 12, usePointStyle: true, pointStyle: 'circle' } },
+        datalabels: {
+          display: (ctx) => {
+            const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+            return total > 0 && (ctx.dataset.data[ctx.dataIndex] / total) >= 0.03;
+          },
+          formatter: (v, ctx) => {
+            const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+            const pct = total ? (v / total * 100).toFixed(0) : 0;
+            return `${ctx.chart.data.labels[ctx.dataIndex]}\n${v} (${pct}%)`;
+          },
+          color: '#ffffff',
+          font: { weight: '600', size: 11 },
+          textAlign: 'center',
+        },
         tooltip: {
           callbacks: {
-            title: (items) => entries[items[0].dataIndex][0],
-            footer: (items) => {
-              const total = items.reduce((s, it) => s + it.parsed.x, 0);
-              return 'Total: ' + total;
+            label: (ctx) => {
+              const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+              const pct = total ? (ctx.parsed / total * 100).toFixed(1) : 0;
+              return `${ctx.label}: ${ctx.parsed} (${pct}%)`;
+            },
+            afterLabel: (ctx) => {
+              if (ctx.label !== 'Outros' || rest.length === 0) return '';
+              const detail = rest.map(([s, n]) => `  ${s}: ${n}`).join('\n');
+              return '\nInclui:\n' + detail;
             }
           }
         }
-      },
-      scales: {
-        x: { stacked: true, grid: { color: cssVar('--border') }, beginAtZero: true, ticks: { precision: 0 } },
-        y: { stacked: true, grid: { display: false } }
       }
     }
   });
