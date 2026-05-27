@@ -442,6 +442,12 @@
         <div class="chart-wrap" style="min-height:340px;"><canvas id="chartDailyVolume"></canvas></div>
       </div>
 
+      <div class="card col-12">
+        <h3>Leads por Estado</h3>
+        <p class="subtitle">Estado inferido pelo DDD do WhatsApp, segmentado por categoria de origem</p>
+        <div class="chart-wrap" style="min-height:420px;"><canvas id="chartLeadsByState"></canvas></div>
+      </div>
+
       <div class="card col-4">
         <h3>Rastreamento dos Leads</h3>
         <p class="subtitle">Leads com origem identificada vs. não rastreados</p>
@@ -672,7 +678,7 @@ function datalabelsForBar(orientation) {
   };
 }
 
-function datalabelsForStackTotal() {
+function datalabelsForStackTotal(orientation) {
   return {
     display: function(ctx) {
       const ds = ctx.chart.data.datasets;
@@ -683,7 +689,7 @@ function datalabelsForStackTotal() {
       return false;
     },
     anchor: 'end',
-    align: 'top',
+    align: orientation === 'horizontal' ? 'end' : 'top',
     formatter: (v, ctx) => {
       const total = ctx.chart.data.datasets.reduce((s, d) => s + (d.data[ctx.dataIndex] || 0), 0);
       return total > 0 ? total : '';
@@ -693,6 +699,52 @@ function datalabelsForStackTotal() {
     clip: false,
     offset: 4,
   };
+}
+
+// DDD do WhatsApp → UF brasileira
+const DDD_TO_STATE = {
+  '11':'SP','12':'SP','13':'SP','14':'SP','15':'SP','16':'SP','17':'SP','18':'SP','19':'SP',
+  '21':'RJ','22':'RJ','24':'RJ',
+  '27':'ES','28':'ES',
+  '31':'MG','32':'MG','33':'MG','34':'MG','35':'MG','37':'MG','38':'MG',
+  '41':'PR','42':'PR','43':'PR','44':'PR','45':'PR','46':'PR',
+  '47':'SC','48':'SC','49':'SC',
+  '51':'RS','53':'RS','54':'RS','55':'RS',
+  '61':'DF',
+  '62':'GO','64':'GO',
+  '63':'TO',
+  '65':'MT','66':'MT',
+  '67':'MS',
+  '68':'AC',
+  '69':'RO',
+  '71':'BA','73':'BA','74':'BA','75':'BA','77':'BA',
+  '79':'SE',
+  '81':'PE','87':'PE',
+  '82':'AL',
+  '83':'PB',
+  '84':'RN',
+  '85':'CE','88':'CE',
+  '86':'PI','89':'PI',
+  '91':'PA','93':'PA','94':'PA',
+  '92':'AM','97':'AM',
+  '95':'RR',
+  '96':'AP',
+  '98':'MA','99':'MA'
+};
+
+function stateFromPhone(phone) {
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (!digits) return 'Desconhecido';
+  let ddd = null;
+  // Com código do país BR (55) + 10/11 dígitos → DDD nos índices 2-3
+  if (digits.startsWith('55') && (digits.length === 12 || digits.length === 13)) {
+    ddd = digits.substring(2, 4);
+  } else if (digits.length === 10 || digits.length === 11) {
+    // Sem código do país → DDD nos primeiros 2 dígitos
+    ddd = digits.substring(0, 2);
+  }
+  if (!ddd) return 'Outro';
+  return DDD_TO_STATE[ddd] || 'Outro';
 }
 
 // Theme toggle
@@ -958,6 +1010,7 @@ function renderAll() {
   const rows = getFiltered();
   renderKPIs(rows);
   renderDailyVolume(rows);
+  renderLeadsByState(rows);
   renderTracked(rows);
   renderOrigin(rows);
   renderConverted(rows);
@@ -1055,6 +1108,64 @@ function renderDailyVolume(rows) {
       scales: {
         x: { stacked: true, grid: { display: false }, ticks: { autoSkip: true, maxRotation: 0 } },
         y: { stacked: true, grid: { color: cssVar('--border') }, beginAtZero: true, ticks: { precision: 0 } }
+      }
+    }
+  });
+}
+
+function renderLeadsByState(rows) {
+  destroyChart('leadsByState');
+  const byState = new Map();
+  rows.forEach(r => {
+    const state = stateFromPhone(r['WhatsApp do Contato']);
+    if (!byState.has(state)) byState.set(state, { 'Meta': 0, 'Google': 0, 'Outras': 0, 'Não Rastreado': 0 });
+    byState.get(state)[originCategory(r['Origem'])] += 1;
+  });
+
+  const sumOf = (obj) => Object.values(obj).reduce((a, b) => a + b, 0);
+  const entries = [...byState.entries()].sort((a, b) => sumOf(b[1]) - sumOf(a[1]));
+
+  if (entries.length === 0) {
+    drawEmptyChart('chartLeadsByState', 'Sem dados de telefone para inferir o estado');
+    return;
+  }
+
+  const colors = categoryColors();
+  const series = ['Meta', 'Google', 'Outras', 'Não Rastreado'];
+  const datasets = series.map(s => ({
+    label: s,
+    data: entries.map(([_, counts]) => counts[s]),
+    backgroundColor: colors[s],
+    borderWidth: 0,
+    borderRadius: 3,
+    borderSkipped: false,
+  }));
+
+  charts.leadsByState = new Chart(document.getElementById('chartLeadsByState'), {
+    type: 'bar',
+    data: { labels: entries.map(e => e[0]), datasets },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      layout: { padding: { right: 36 } },
+      plugins: {
+        legend: { position: 'top', labels: { boxWidth: 12, boxHeight: 12, padding: 14, usePointStyle: true, pointStyle: 'rectRounded' } },
+        datalabels: datalabelsForStackTotal('horizontal'),
+        tooltip: {
+          callbacks: {
+            title: (items) => entries[items[0].dataIndex][0],
+            footer: (items) => {
+              const total = items.reduce((s, it) => s + it.parsed.x, 0);
+              return 'Total: ' + total;
+            }
+          }
+        }
+      },
+      scales: {
+        x: { stacked: true, grid: { color: cssVar('--border') }, beginAtZero: true, ticks: { precision: 0 } },
+        y: { stacked: true, grid: { display: false } }
       }
     }
   });
